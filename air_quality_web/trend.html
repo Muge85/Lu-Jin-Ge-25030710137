@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>时序趋势分析 - 空气质量时空演变可视化系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="page-title">
+      <h2>时序趋势分析</h2>
+      <p>污染物年际变化、季节周期特征与污染等级结构演变（图例可勾选隐藏）</p>
+    </div>
+
+    <div class="filter-bar" id="filterBar"></div>
+
+    <div class="card">
+      <h3>多污染物年际变化（全国均值） <span class="sub" id="trendSub"></span></h3>
+      <div id="chartYear" class="chart" style="height:360px"></div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:16px">
+      <div class="card">
+        <h3>月度周期特征 <span class="sub">12 个月平均浓度 · 体现季节规律</span></h3>
+        <div id="chartMonth" class="chart" style="height:360px"></div>
+      </div>
+      <div class="card">
+        <h3>污染等级占比演变 <span class="sub">堆叠面积图 · 优 / 良 / 轻度 / 中度 / 重度</span></h3>
+        <div id="chartLevel" class="chart" style="height:360px"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/echarts.min.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    AQ.initPage("trend", { filters: ["province"] });
+
+    if (!AQ.hasData()) {
+      AQ.noData(document.getElementById("chartYear"), "接入真实数据后展示多污染物年际变化");
+      AQ.noData(document.getElementById("chartMonth"), "接入真实数据后展示月度周期特征");
+      AQ.noData(document.getElementById("chartLevel"), "接入真实数据后展示污染等级占比演变");
+    } else {
+    var chartYear = AQ.makeChart(document.getElementById("chartYear"));
+    var chartMonth = AQ.makeChart(document.getElementById("chartMonth"));
+    var chartLevel = AQ.makeChart(document.getElementById("chartLevel"));
+
+    var monthColors = { "AQI": "#3a7bd5", "PM2.5": "#8e6fd8", "O3": "#e67e22",
+                        "NO2": "#2fa876", "SO2": "#16a3b8", "CO": "#d16ba5" };
+    var monthNames = AQI_MONTH_AVG.months.map(function (m) { return m + "月"; });
+
+    function refresh() {
+      var prov = AQ.state.province;
+      document.getElementById("trendSub").textContent =
+        "当前筛选：" + prov + "（三个图表均按该范围展示）";
+      var nat = AQ.nationalSeries();
+
+      // 年际序列：全国用汇总表，省份按该省城市年均再求均值
+      function yearData(key) {
+        if (prov === "全国") return nat.map(function (r) { return r[key]; });
+        return AQ.YEARS.map(function (y) {
+          var rs = AQ.cityYear(y, prov);
+          return rs.length ? +(rs.reduce(function (s, r) { return s + r[key]; }, 0) / rs.length).toFixed(1) : null;
+        });
+      }
+
+      // ---- 年际变化 ----
+      var series = AQ.POLLUTANTS.filter(function (p) { return p !== "CO"; }).map(function (p) {
+        return {
+          name: p, type: "line", smooth: true, symbolSize: 6,
+          data: yearData(p),
+          itemStyle: { color: monthColors[p] }
+        };
+      });
+      series.push({
+        name: "CO", type: "line", yAxisIndex: 1, smooth: true,
+        data: yearData("CO"),
+        itemStyle: { color: monthColors["CO"] }
+      });
+      chartYear.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { top: 0 },
+        grid: { left: 50, right: 55, top: 40, bottom: 30 },
+        xAxis: { type: "category", data: AQ.YEARS.map(String) },
+        yAxis: [
+          { type: "value", name: "μg/m³" },
+          { type: "value", name: "CO (mg/m³)", max: 2 }
+        ],
+        series: series
+      }, true);
+
+      // ---- 月度周期（按省筛选） ----
+      var mdata = prov === "全国" ? AQI_MONTH_AVG.national : AQI_MONTH_AVG.byProvince[prov];
+      var mSeries = AQ.POLLUTANTS.filter(function (p) { return p !== "CO"; }).map(function (p) {
+        return {
+          name: p, type: "line", smooth: true,
+          data: mdata[p], itemStyle: { color: monthColors[p] }
+        };
+      });
+      chartMonth.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { top: 0 },
+        grid: { left: 50, right: 24, top: 40, bottom: 30 },
+        xAxis: { type: "category", data: monthNames, boundaryGap: false },
+        yAxis: { type: "value", name: "μg/m³" },
+        series: mSeries
+      }, true);
+
+      // ---- 污染等级堆叠面积（全国 / 分省联动） ----
+      var levels = AQI_MONTH_AVG.levels;
+      var lvData = AQI_MONTH_AVG.levelByYear;
+      var lvProv = AQI_MONTH_AVG.levelByProvince || {};
+      chartLevel.setOption({
+        tooltip: { trigger: "axis", valueFormatter: function (v) { return v + " %"; } },
+        legend: { top: 0, data: levels },
+        grid: { left: 50, right: 24, top: 40, bottom: 30 },
+        xAxis: { type: "category", boundaryGap: false, data: AQ.YEARS.map(String) },
+        yAxis: { type: "value", name: "占比 (%)", max: 100 },
+        series: levels.map(function (lv, i) {
+          return {
+            name: lv, type: "line", stack: "total", areaStyle: { opacity: 0.65 },
+            smooth: true, symbolSize: 0, emphasis: { focus: "series" },
+            data: AQ.YEARS.map(function (y) {
+              return prov !== "全国" && lvProv[prov] ? lvProv[prov][y][i] : lvData[y][i];
+            }),
+            itemStyle: { color: AQ.LEVEL_COLORS[i] }
+          };
+        })
+      }, true);
+    }
+
+    AQ.onRefresh(refresh);
+    refresh();
+    }
+  </script>
+</body>
+</html>

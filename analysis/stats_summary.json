@@ -1,0 +1,82 @@
+{
+  "pearson_tests": {
+    "气温-O3": {
+      "r": 0.63,
+      "p": 1.4e-318,
+      "n": 2880
+    },
+    "风速-PM2.5": {
+      "r": -0.238,
+      "p": 1.62e-38,
+      "n": 2880
+    },
+    "气温-PM2.5": {
+      "r": -0.627,
+      "p": 3.31e-314,
+      "n": 2880
+    }
+  },
+  "linear_trend": {
+    "AQI": {
+      "slope_per_year": -3.48,
+      "r": -0.962,
+      "p": 8.33e-06,
+      "change_2015_2024": -31.4
+    },
+    "PM2.5": {
+      "slope_per_year": -3.13,
+      "r": -0.954,
+      "p": 1.87e-05,
+      "change_2015_2024": -28.2
+    },
+    "O3": {
+      "slope_per_year": 1.5,
+      "r": 0.909,
+      "p": 0.000264,
+      "change_2015_2024": 13.5
+    },
+    "NO2": {
+      "slope_per_year": -2.09,
+      "r": -0.972,
+      "p": 2.42e-06,
+      "change_2015_2024": -18.8
+    },
+    "SO2": {
+      "slope_per_year": -2.83,
+      "r": -0.915,
+      "p": 0.000208,
+      "change_2015_2024": -25.5
+    },
+    "CO": {
+      "slope_per_year": -0.07,
+      "r": -0.957,
+      "p": 1.48e-05,
+      "change_2015_2024": -0.6
+    }
+  },
+  "figures": [
+    "01_national_trend.png",
+    "02_monthly_cycle.png",
+    "03_correlation_heatmap.png",
+    "04_province_aqi_2024.png",
+    "05_pm25_improvement.png",
+    "06_weather_scatter.png",
+    "07_official_compare.png"
+  ],
+  "charts_html": "charts.html",
+  "web_charts_html": "analysis_charts.html",
+  "official_benchmark": {
+    "dataset": "中国环境空气质量官方年度指标数据集（2015—2024）",
+    "records": 10,
+    "verified_pages": 7,
+    "verified_match": 7,
+    "pm25_mean_gap": 8.2,
+    "pm25_trend_pearson": {
+      "r": 0.989,
+      "p": 6.1e-08,
+      "n": 10
+    },
+    "figure": "07_official_compare.png",
+    "citation": "中华人民共和国生态环境部. 中国生态环境状况公报（2015—2024）及历年《12月和1—12月全国环境空气质量状况》通报. https://www.mee.gov.cn/. 监测数据来源：中国环境监测总站《全国城市空气质量实时发布平台》."
+  }
+}

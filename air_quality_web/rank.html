@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>城市排名对比 - 空气质量时空演变可视化系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="page-title">
+      <h2>城市排名与对比分析</h2>
+      <p>识别高污染城市与治理改善明显城市，支持自选城市对比与明细检索</p>
+    </div>
+
+    <div class="filter-bar" id="filterBar"></div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>TOP20 高污染城市排行榜 <span class="sub" id="topSub"></span></h3>
+        <div id="chartTop" class="chart" style="height:560px"></div>
+      </div>
+      <div class="card">
+        <h3>十年改善幅度排行榜 <span class="sub">PM2.5 浓度下降百分比（2015 → 2024）TOP15</span></h3>
+        <div id="chartImprove" class="chart" style="height:560px"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>自选城市对比 <span class="sub">点击城市名选择（最多 5 个），对比指定污染物十年变化</span></h3>
+      <div class="city-chips" id="cityChips"></div>
+      <div id="chartCompare" class="chart" style="height:360px"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3>城市明细数据表 <span class="sub" id="tableSub"></span></h3>
+      <div style="margin-bottom:10px">
+        <input class="search-input" id="searchBox" type="text" placeholder="输入城市或省份名称搜索...">
+      </div>
+      <div style="max-height:420px; overflow-y:auto">
+        <table class="data-table" id="dataTable">
+          <thead>
+            <tr>
+              <th data-k="city">城市</th><th data-k="province">省份</th><th data-k="AQI">AQI</th>
+              <th data-k="PM2.5">PM2.5</th><th data-k="O3">O₃</th><th data-k="NO2">NO₂</th>
+              <th data-k="SO2">SO₂</th><th data-k="CO">CO</th><th>等级</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/echarts.min.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    AQ.initPage("rank", { filters: ["pollutant", "province", "year"] });
+
+    if (!AQ.hasData()) {
+      AQ.noData(document.getElementById("chartTop"), "接入真实数据后展示 TOP20 高污染城市排行");
+      AQ.noData(document.getElementById("chartImprove"), "接入真实数据后展示十年改善幅度排行");
+      AQ.noData(document.getElementById("chartCompare"), "接入真实数据后支持自选城市对比");
+      document.getElementById("cityChips").innerHTML =
+        '<span style="color:#8aa3c2;font-size:13px">待接入真实数据后可选择城市进行对比</span>';
+      document.querySelector("#dataTable tbody").innerHTML =
+        '<tr><td colspan="9" style="color:#8aa3c2;padding:24px">待接入真实数据后展示城市明细</td></tr>';
+    } else {
+    var chartTop = AQ.makeChart(document.getElementById("chartTop"));
+    var chartImp = AQ.makeChart(document.getElementById("chartImprove"));
+    var chartCmp = AQ.makeChart(document.getElementById("chartCompare"));
+    var selected = [];   // 自选对比城市
+    var sortKey = "AQI", sortAsc = false;
+
+    // ---- 城市选择 chips（基于当前筛选省份） ----
+    function renderChips() {
+      var prov = AQ.state.province;
+      var cities = AQ.cityYear(2024, prov).map(function (r) { return r.city; });
+      selected = selected.filter(function (c) { return cities.indexOf(c) >= 0; });
+      document.getElementById("cityChips").innerHTML = cities.map(function (c) {
+        return '<span class="chip' + (selected.indexOf(c) >= 0 ? " on" : "") + '" data-c="' + c + '">' + c + '</span>';
+      }).join("");
+      document.querySelectorAll("#cityChips .chip").forEach(function (el) {
+        el.onclick = function () {
+          var c = this.getAttribute("data-c");
+          var i = selected.indexOf(c);
+          if (i >= 0) selected.splice(i, 1);
+          else if (selected.length < 5) selected.push(c);
+          else return alert("最多同时对比 5 个城市");
+          this.classList.toggle("on");
+          refreshCompare();
+        };
+      });
+    }
+
+    function refreshCompare() {
+      var p = AQ.state.pollutant, meta = AQ.POLLUTANT_META[p];
+      chartCmp.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { top: 0 },
+        grid: { left: 50, right: 24, top: 40, bottom: 30 },
+        xAxis: { type: "category", data: AQ.YEARS.map(String) },
+        yAxis: { type: "value", name: meta.unit || "AQI" },
+        series: selected.map(function (c, i) {
+          var colors = ["#3a7bd5", "#e67e22", "#2fa876", "#8e6fd8", "#e2543a"];
+          return {
+            name: c, type: "line", smooth: true, symbolSize: 7,
+            data: AQ.citySeries(c).map(function (r) { return r[p]; }),
+            itemStyle: { color: colors[i] }, lineStyle: { width: 3 }
+          };
+        })
+      }, true);
+    }
+
+    // ---- 明细表 ----
+    function levelTag(aqi) {
+      var i = aqi <= 50 ? 0 : aqi <= 100 ? 1 : aqi <= 150 ? 2 : aqi <= 200 ? 3 : 4;
+      return '<span class="tag g' + (i + 1) + '">' + AQ.LEVELS[i] + "</span>";
+    }
+
+    function renderTable() {
+      // 归一化：去掉"省/市/自治区"等行政区划后缀再匹配，
+      // 使"黑龙江省"、"南宁市"等全称输入也能命中简称数据
+      function norm(s) {
+        return String(s).replace(/维吾尔|壮族|回族|自治区|特别行政区|省|市|自治州|地区|盟/g, "");
+      }
+      var kw = norm(document.getElementById("searchBox").value.trim());
+      var rows = AQ.cityYear(AQ.state.year, AQ.state.province)
+        .filter(function (r) {
+          return !kw || norm(r.city).indexOf(kw) >= 0 || norm(r.province).indexOf(kw) >= 0;
+        })
+        .sort(function (a, b) {
+          var va = a[sortKey], vb = b[sortKey];
+          if (typeof va === "string") return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+          return sortAsc ? va - vb : vb - va;
+        });
+      document.querySelector("#dataTable tbody").innerHTML = rows.map(function (r) {
+        return "<tr><td>" + r.city + "</td><td>" + r.province + "</td><td>" + r.AQI + "</td><td>" +
+          r["PM2.5"] + "</td><td>" + r["O3"] + "</td><td>" + r["NO2"] + "</td><td>" +
+          r["SO2"] + "</td><td>" + r["CO"] + "</td><td>" + levelTag(r.AQI) + "</td></tr>";
+      }).join("") || '<tr><td colspan="9">无匹配数据</td></tr>';
+    }
+
+    document.querySelectorAll("#dataTable th").forEach(function (th) {
+      th.onclick = function () {
+        var k = this.getAttribute("data-k");
+        if (!k) return;
+        sortAsc = (k === sortKey) ? !sortAsc : false;
+        sortKey = k;
+        renderTable();
+      };
+    });
+    document.getElementById("searchBox").addEventListener("input", renderTable);
+
+    function refresh() {
+      var p = AQ.state.pollutant, y = AQ.state.year, prov = AQ.state.province;
+      var meta = AQ.POLLUTANT_META[p];
+      document.getElementById("topSub").textContent = meta.label + " · " + y + "年" +
+        (prov === "全国" ? " · 全国" : " · " + prov);
+
+      // TOP20
+      var top = AQ.cityYear(y, prov).sort(function (a, b) { return b[p] - a[p]; }).slice(0, 20);
+      chartTop.setOption({
+        tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+        grid: { left: 80, right: 60, top: 10, bottom: 30 },
+        xAxis: { type: "value", name: meta.unit },
+        yAxis: { type: "category", inverse: true, data: top.map(function (r) { return r.city; }) },
+        series: [{
+          type: "bar",
+          data: top.map(function (r, i) {
+            return {
+              value: r[p],
+              itemStyle: { color: i < 5 ? "#e2543a" : "#ef8c3a", borderRadius: [0, 4, 4, 0] }
+            };
+          }),
+          label: { show: true, position: "right", color: "#5a7ca6" }
+        }]
+      }, true);
+
+      // 改善榜
+      var imp = AQI_RANK.improve.slice(0, 15);
+      chartImp.setOption({
+        tooltip: {
+          trigger: "axis", axisPointer: { type: "shadow" },
+          formatter: function (ps) {
+            var d = AQI_RANK.improve.filter(function (r) { return r.city === ps[0].name; })[0];
+            return "<b>" + d.city + "</b>（" + d.province + "）<br/>PM2.5：" +
+              d.pm25_2015 + " → " + d.pm25_2024 + " μg/m³<br/>下降 <b style='color:#ffd04b'>" +
+              d.pm25_drop_pct + "%</b>";
+          }
+        },
+        grid: { left: 80, right: 60, top: 10, bottom: 30 },
+        xAxis: { type: "value", name: "%" },
+        yAxis: { type: "category", inverse: true, data: imp.map(function (r) { return r.city; }) },
+        series: [{
+          type: "bar",
+          data: imp.map(function (r) {
+            return { value: r.pm25_drop_pct, itemStyle: { color: "#2fa876", borderRadius: [0, 4, 4, 0] } };
+          }),
+          label: { show: true, position: "right", color: "#1e7e46", formatter: "{c}%" }
+        }]
+      }, true);
+
+      document.getElementById("tableSub").textContent =
+        "当前范围：" + (prov === "全国" ? "全国" : prov) + " · " + y +
+        "年 · 搜索仅在此范围内进行（可输入全称，如“黑龙江省”）";
+      renderChips();
+      refreshCompare();
+      renderTable();
+    }
+
+    AQ.onRefresh(refresh);
+    refresh();
+    }
+  </script>
+</body>
+</html>

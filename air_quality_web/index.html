@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>首页总览 - 空气质量时空演变可视化系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="page-title">
+      <h2>项目总览仪表盘</h2>
+      <p>近十年全国城市空气质量时空演变与污染特征可视化系统</p>
+    </div>
+
+    <!-- 年份筛选：与其驱动的指标卡片编组 -->
+    <div class="filter-bar" id="yearBar">
+      <div class="filter-item"><label>统计年份</label>
+        <input type="range" id="fYear" min="2015" max="2024" step="1" value="2024">
+        <span class="year-badge" id="fYearBadge">2024</span>
+      </div>
+      <span class="filter-tip">切换年份后，下方指标卡片同步刷新</span>
+    </div>
+
+    <!-- 指标卡片 -->
+    <div class="metric-cards" id="metricCards">
+      <div class="metric-card">
+        <div class="label">全国平均 AQI</div>
+        <div class="value" id="mAqi">--</div>
+        <div class="delta" id="mAqiDelta"></div>
+      </div>
+      <div class="metric-card warn">
+        <div class="label">PM2.5 年均浓度</div>
+        <div class="value" id="mPm">--<span class="unit"> μg/m³</span></div>
+        <div class="delta" id="mPmDelta"></div>
+      </div>
+      <div class="metric-card warn">
+        <div class="label">O₃ 年均浓度</div>
+        <div class="value" id="mO3">--<span class="unit"> μg/m³</span></div>
+        <div class="delta" id="mO3Delta"></div>
+      </div>
+      <div class="metric-card ok">
+        <div class="label">优良天数比例（官方公报）</div>
+        <div class="value" id="mGood">--<span class="unit"> %</span></div>
+        <div class="delta" id="mGoodDelta"></div>
+      </div>
+      <div class="metric-card">
+        <div class="label">有效监测城市数</div>
+        <div class="value" id="mCities">--<span class="unit"> 个</span></div>
+        <div class="delta">覆盖 31 个省级行政区</div>
+      </div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>十年 AQI 总体趋势 <span class="sub">2015-2024 全国城市均值</span></h3>
+        <div id="chartAqiTrend" class="chart" style="height:320px"></div>
+      </div>
+      <div class="card">
+        <div class="card-head-row">
+          <h3>污染物十年趋势 <span class="sub">随右侧选择联动</span></h3>
+          <select class="inline-select" id="fPollutant"></select>
+        </div>
+        <div id="chartPoTrend" class="chart" style="height:320px"></div>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr; margin-top:16px">
+      <div class="card doc-block">
+        <h3>项目简介</h3>
+        <p>
+          本系统面向 2015—2024 年全国地级市空气质量监测数据，选取 AQI、PM2.5、O₃、NO₂、SO₂、CO
+          等核心大气污染物指标，配套气温、降水量、风速等气象要素，通过交互式可视化网站呈现我国近十年空气质量的
+          <b>年际变化、空间分布、季节周期</b>特征，对比 PM2.5 与臭氧复合型污染的差异化演变，探究气象条件对污染物浓度的影响。
+        </p>
+        <div class="notice">
+          数据来源：空气质量数据来自<b>中国环境监测总站（CNEMC）</b>全国城市空气质量实时发布平台的公开历史归档
+          （经 quotsoft.net 与 CN-AIR 开源数据集整理），气象数据来自 <b>Open-Meteo</b> 历史气象档案，
+          并另建<b>生态环境部官方年度公报基准数据集</b>（逐条附官网出处）用于对照核验。
+          原始逐日数据按每 3 天抽样后聚合，详见"数据与项目说明"页。
+        </div>
+        <p><b>快速导航：</b>
+          <a href="dashboard.html">综合数据仪表盘</a> ·
+          <a href="map.html">空间分布分析</a> ·
+          <a href="trend.html">时序趋势分析</a> ·
+          <a href="rank.html">城市排名对比</a> ·
+          <a href="correlation.html">相关性分析</a> ·
+          <a href="official.html">权威数据对照</a> ·
+          <a href="about.html">数据与项目说明</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/echarts.min.js"></script>
+  <script src="js/main.js"></script>
+  <script src="data/official_benchmark.js"></script>
+  <script>
+    AQ.initPage("index", {});
+
+    // 污染物选择：内嵌于右侧趋势图卡片标题行
+    var selP = document.getElementById("fPollutant");
+    selP.innerHTML = AQ.POLLUTANTS.map(function (p) {
+      return '<option value="' + p + '">' + AQ.POLLUTANT_META[p].label + '</option>';
+    }).join("");
+    selP.value = AQ.state.pollutant;
+    selP.addEventListener("change", function () {
+      AQ.state.pollutant = this.value;
+      AQ.notify();
+    });
+
+    // 年份滑块：内嵌于指标卡片上方
+    var yr = document.getElementById("fYear");
+    yr.addEventListener("input", function () {
+      AQ.state.year = +this.value;
+      document.getElementById("fYearBadge").textContent = this.value;
+      AQ.notify();
+    });
+
+    if (!AQ.hasData()) {
+      AQ.noData(document.getElementById("chartAqiTrend"), "接入真实数据后展示 2015-2024 全国 AQI 趋势");
+      AQ.noData(document.getElementById("chartPoTrend"), "接入真实数据后展示所选污染物十年趋势");
+    } else {
+    var chartAqi = AQ.makeChart(document.getElementById("chartAqiTrend"));
+    var chartPo = AQ.makeChart(document.getElementById("chartPoTrend"));
+    var nat = AQ.nationalSeries();
+    var years = AQ.YEARS.map(String);
+
+    function refresh() {
+      var y = AQ.state.year;
+      var cur = nat.filter(function (r) { return r.year === y; })[0];
+      var prev = nat.filter(function (r) { return r.year === y - 1; })[0];
+      // 优良天数比例采用生态环境部官方公报口径（逐日优良天数占比），而非年度均值推导，
+      // 避免“年均 AQI 全落在优/良区间”导致比例虚高到 100% 的失真。
+      var off = AQI_OFFICIAL.records.filter(function (r) { return r.year === y; })[0];
+      var prevOff = prev ? AQI_OFFICIAL.records.filter(function (r) { return r.year === prev.year; })[0] : null;
+      var good = off ? off.good_rate : null;
+      var prevGood = prevOff ? prevOff.good_rate : null;
+
+      // 安全更新指标卡片数值（保留单位 <span> 不被覆盖）
+      function setMetric(id, v) {
+        var el = document.getElementById(id);
+        if (el.firstChild) el.firstChild.nodeValue = v;
+        else el.textContent = v;
+      }
+      setMetric("mAqi", cur.AQI);
+      setMetric("mPm", cur["PM2.5"]);
+      setMetric("mO3", cur["O3"]);
+      setMetric("mGood", good != null ? good.toFixed(1) : "--");
+      setMetric("mCities", AQ.cityYear(y, "全国").length);
+
+      function delta(id, curV, prevV, goodWhenDown) {
+        var el = document.getElementById(id);
+        if (!prev || prevV == null || curV == null) { el.textContent = "—"; return; }
+        var diff = +(curV - prevV).toFixed(1);
+        var down = diff < 0;
+        var good = goodWhenDown ? down : !down;
+        el.textContent = "较上年 " + (down ? "↓ " : "↑ ") + Math.abs(diff) + (good ? "（改善）" : "（上升）");
+        el.className = "delta" + (good ? "" : " bad");
+      }
+      delta("mAqiDelta", cur.AQI, prev && prev.AQI, true);
+      delta("mPmDelta", cur["PM2.5"], prev && prev["PM2.5"], true);
+      delta("mO3Delta", cur["O3"], prev && prev["O3"], true);
+      delta("mGoodDelta", good, prevGood, false);
+
+      chartAqi.setOption({
+        tooltip: { trigger: "axis" },
+        grid: { left: 50, right: 24, top: 36, bottom: 30 },
+        xAxis: { type: "category", data: years },
+        yAxis: { type: "value", name: "AQI" },
+        series: [{
+          name: "全国平均AQI", type: "line", data: nat.map(function (r) { return r.AQI; }),
+          smooth: true, symbolSize: 8, itemStyle: { color: "#3a7bd5" },
+          lineStyle: { width: 3 },
+          areaStyle: { color: "rgba(58,123,213,0.12)" },
+          label: { show: true, color: "#2b5aa0" }
+        }]
+      }, true);
+
+      // 右图：跟随顶部筛选的污染物十年趋势
+      var p = AQ.state.pollutant, meta = AQ.POLLUTANT_META[p];
+      chartPo.setOption({
+        tooltip: {
+          trigger: "axis",
+          formatter: function (ps) {
+            return ps[0].axisLabel ? "" : meta.label + "<br/>" + ps[0].name + "年：<b>" + ps[0].value + "</b> " + meta.unit;
+          }
+        },
+        grid: { left: 60, right: 30, top: 40, bottom: 30 },
+        xAxis: { type: "category", data: years },
+        yAxis: { type: "value", name: meta.unit || "AQI" },
+        series: [{
+          name: meta.label, type: "line", data: nat.map(function (r) { return r[p]; }),
+          smooth: true, symbolSize: 8, itemStyle: { color: meta.color },
+          lineStyle: { width: 3 },
+          areaStyle: { color: meta.color, opacity: 0.12 },
+          label: { show: true, color: "#2b5aa0" }
+        }]
+      }, true);
+    }
+
+    AQ.onRefresh(refresh);
+    refresh();
+    }
+  </script>
+</body>
+</html>

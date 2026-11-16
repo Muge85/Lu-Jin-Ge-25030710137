@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>空间分布分析 - 空气质量时空演变可视化系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="page-title">
+      <h2>空间分布分析</h2>
+      <p>全国城市空气质量地理可视化 · 时间轴动画展示年际演变（点击城市查看十年曲线）</p>
+    </div>
+
+    <div class="filter-bar" id="filterBar"></div>
+
+    <div class="grid cols-32">
+      <div class="card">
+        <h3>全国城市污染物浓度分布 <span class="sub">地图可拖拽缩放，时间轴自动播放 2015-2024</span></h3>
+        <div id="chartMap" class="chart" style="height:640px"></div>
+      </div>
+      <div class="card">
+        <h3>省份平均浓度排名 <span class="sub" id="barSub"></span></h3>
+        <div id="chartProvBar" class="chart" style="height:640px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 城市详情弹窗 -->
+  <div class="modal-mask" id="modalMask">
+    <div class="modal">
+      <div class="modal-head">
+        <h4 id="modalTitle">城市详情</h4>
+        <span class="close" id="modalClose">✕</span>
+      </div>
+      <div id="chartCity" class="chart" style="height:380px"></div>
+    </div>
+  </div>
+
+  <script src="js/echarts.min.js"></script>
+  <script src="js/china.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    AQ.initPage("map", { filters: ["pollutant", "province"] });
+    echarts.registerMap("china", window.CHINA_GEOJSON);
+
+    if (!AQ.hasData()) {
+      AQ.noData(document.getElementById("chartMap"), "接入真实数据后展示城市污染分布地图与时间轴动画");
+      AQ.noData(document.getElementById("chartProvBar"), "接入真实数据后展示省份平均浓度排名");
+    } else {
+    var chartMap = AQ.makeChart(document.getElementById("chartMap"));
+    var chartBar = AQ.makeChart(document.getElementById("chartProvBar"));
+    var chartCity = null;
+
+    function scatterData(year, pollutant) {
+      return AQ.cityYear(year, AQ.state.province).map(function (r) {
+        return {
+          name: r.city,
+          value: [r.lon, r.lat, r[pollutant], r.AQI],
+          province: r.province
+        };
+      });
+    }
+
+    // 根据当前显示的城市集合计算地图视图（全国视图 / 省份自动定位缩放）
+    function geoView() {
+      if (AQ.state.province === "全国") return { zoom: 1.15 };
+      var pts = AQ.cityYear(AQ.state.year, AQ.state.province);
+      if (!pts.length) return { zoom: 1.15 };
+      var lons = pts.map(function (r) { return r.lon; });
+      var lats = pts.map(function (r) { return r.lat; });
+      var dLon = Math.max.apply(null, lons) - Math.min.apply(null, lons);
+      var dLat = Math.max.apply(null, lats) - Math.min.apply(null, lats);
+      var span = Math.max(dLon, dLat * 1.6, 1.5);          // 避免单城/近距离城市过度放大
+      return {
+        center: [
+          (Math.min.apply(null, lons) + Math.max.apply(null, lons)) / 2,
+          (Math.min.apply(null, lats) + Math.max.apply(null, lats)) / 2
+        ],
+        zoom: Math.min(8, Math.max(2.5, 22 / span))
+      };
+    }
+
+    function mapOption(year, pollutant) {
+      var meta = AQ.POLLUTANT_META[pollutant];
+      return {
+        timeline: {
+          data: AQ.YEARS.map(String),
+          currentIndex: AQ.YEARS.indexOf(year),
+          playInterval: 1600, autoPlay: true, loop: true,
+          left: "center", bottom: 0, width: "80%",
+          label: { color: "#5a7ca6" },
+          lineStyle: { color: "#bcd2ea" },
+          itemStyle: { color: "#3a7bd5" },
+          checkpointStyle: { color: "#e2543a" },
+          controlStyle: { color: "#3a7bd5", borderColor: "#3a7bd5" }
+        },
+        baseOption: {
+          tooltip: {
+            backgroundColor: "rgba(40,60,90,0.92)", borderWidth: 0,
+            textStyle: { color: "#fff", fontSize: 13 },
+            formatter: function (p) {
+              if (!p.value) return p.name;
+              return "<b>" + p.name + "</b>（" + p.data.province + "）<br/>" +
+                meta.label + "：<b style='color:#ffd04b'>" + p.value[2] + "</b> " + meta.unit +
+                "<br/>AQI：" + p.value[3];
+            }
+          },
+          visualMap: {
+            min: 0, max: meta.max, left: 20, bottom: 60,
+            text: ["高污染", "低"], inRange: { color: AQ.warningPalette() },
+            calculable: true, textStyle: { color: "#5a7ca6" }
+          },
+          geo: Object.assign({
+            map: "china", roam: true,
+            itemStyle: { areaColor: "#e8f2fd", borderColor: "#b6cde8" },
+            emphasis: { itemStyle: { areaColor: "#cfe4f8" }, label: { show: false } }
+          }, geoView()),
+          series: [{
+            name: pollutant, type: "scatter", coordinateSystem: "geo",
+            symbolSize: function (v) { return 8 + Math.min(20, v[2] / meta.max * 22); },
+            label: { show: false },
+            emphasis: { label: { show: true, formatter: "{b}", position: "top", color: "#2b5aa0" } },
+            data: scatterData(year, pollutant),
+            zlevel: 2
+          }]
+        },
+        options: AQ.YEARS.map(function (y) {
+          return { series: [{ data: scatterData(y, pollutant) }] };
+        })
+      };
+    }
+
+    function updateBar(year) {
+      var p = AQ.state.pollutant;
+      document.getElementById("barSub").textContent =
+        AQ.POLLUTANT_META[p].label + " · " + year + "年 · 当前筛选：" + AQ.state.province;
+
+      var data = AQ.provinceAvg(year, p).sort(function (a, b) { return a.value - b.value; }).slice(0, 15);
+      chartBar.setOption({
+        tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+        grid: { left: 90, right: 50, top: 20, bottom: 30 },
+        xAxis: { type: "value", name: AQ.POLLUTANT_META[p].unit },
+        yAxis: { type: "category", data: data.map(function (d) { return d.province; }) },
+        series: [{
+          type: "bar", data: data.map(function (d) {
+            return {
+              value: d.value,
+              itemStyle: {
+                color: d.province === AQ.state.province ? "#e2543a" : "#3a7bd5",
+                borderRadius: [0, 4, 4, 0]
+              }
+            };
+          }),
+          label: { show: true, position: "right", color: "#5a7ca6" }
+        }]
+      }, true);
+    }
+
+    function refresh() {
+      chartMap.setOption(mapOption(AQ.state.year, AQ.state.pollutant), true);
+      updateBar(AQ.state.year);
+    }
+
+    // 时间轴播放时，右侧省份排名柱状图跟随当前年份同步刷新
+    chartMap.on("timelinechanged", function (e) {
+      AQ.state.year = AQ.YEARS[e.currentIndex];
+      updateBar(AQ.state.year);
+    });
+
+    // 点击城市 -> 十年曲线弹窗
+    chartMap.on("click", function (p) {
+      if (!p.name || !p.value) return;
+      document.getElementById("modalTitle").textContent = p.name + " · 十年污染物变化（2015-2024）";
+      document.getElementById("modalMask").classList.add("show");
+      if (!chartCity) chartCity = echarts.init(document.getElementById("chartCity"));
+      chartCity.resize();
+
+      var series = AQ.citySeries(p.name);
+      chartCity.setOption({
+        tooltip: { trigger: "axis" },
+        legend: { top: 0 },
+        grid: { left: 50, right: 50, top: 40, bottom: 30 },
+        xAxis: { type: "category", data: AQ.YEARS.map(String) },
+        yAxis: [
+          { type: "value", name: "μg/m³" },
+          { type: "value", name: "AQI / CO", max: 300 }
+        ],
+        series: [
+          { name: "PM2.5", type: "line", smooth: true, data: series.map(function (r) { return r["PM2.5"]; }), itemStyle: { color: "#8e6fd8" } },
+          { name: "O₃", type: "line", smooth: true, data: series.map(function (r) { return r["O3"]; }), itemStyle: { color: "#e67e22" } },
+          { name: "NO₂", type: "line", smooth: true, data: series.map(function (r) { return r["NO2"]; }), itemStyle: { color: "#2fa876" } },
+          { name: "SO₂", type: "line", smooth: true, data: series.map(function (r) { return r["SO2"]; }), itemStyle: { color: "#16a3b8" } },
+          { name: "AQI", type: "line", yAxisIndex: 1, smooth: true, data: series.map(function (r) { return r["AQI"]; }), itemStyle: { color: "#3a7bd5" }, lineStyle: { width: 3, type: "dashed" } }
+        ]
+      }, true);
+    });
+    document.getElementById("modalClose").onclick = function () {
+      document.getElementById("modalMask").classList.remove("show");
+    };
+    document.getElementById("modalMask").onclick = function (e) {
+      if (e.target === this) this.classList.remove("show");
+    };
+
+    AQ.onRefresh(refresh);
+    refresh();
+    }
+  </script>
+</body>
+</html>

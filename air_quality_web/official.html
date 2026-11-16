@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>官方权威数据对照 - 空气质量时空演变可视化系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="page-title">
+      <h2>官方权威数据对照</h2>
+      <p>生态环境部官方年度公报与通报 · 2015—2024 全国城市空气质量指标</p>
+    </div>
+
+    <div class="filter-bar">
+      <span class="filter-tip">本页数据逐条取自生态环境部官网，点击来源链接可核对原文</span>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card doc-block">
+        <h3>一、权威数据集说明</h3>
+        <table>
+          <tr><th>项目</th><th>说明</th></tr>
+          <tr><td>数据集</td><td id="mName"></td></tr>
+          <tr><td>发布机构</td><td id="mPublisher"></td></tr>
+          <tr><td>权威性</td><td id="mAuthority"></td></tr>
+          <tr><td>覆盖范围</td><td id="mCoverage"></td></tr>
+          <tr><td>来源平台</td><td><a id="mPortal" href="#" target="_blank" rel="noopener"></a></td></tr>
+          <tr><td>获取日期</td><td id="mRetrieved"></td></tr>
+        </table>
+        <div class="notice" id="mScope"></div>
+        <div class="notice" id="mVerify"></div>
+      </div>
+
+      <div class="card">
+        <h3>PM2.5 年均浓度：官方统计 vs 本项目聚合 <span class="sub">μg/m³</span></h3>
+        <div id="chartPmCompare" class="chart" style="height:330px"></div>
+        <div class="notice" id="mDeviation"></div>
+      </div>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr; margin-top:16px">
+      <div class="card">
+        <h3>二、十年官方指标明细 <span class="sub">— 表示当年通报未公布该项，绝不以推算值填充；表头悬停可见指标定义</span></h3>
+        <div style="overflow-x:auto">
+          <table id="officialTable"></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:16px">
+      <div class="card">
+        <h3>优良天数比例：两种官方口径 <span class="sub">%</span></h3>
+        <div id="chartGoodRate" class="chart" style="height:330px"></div>
+        <div class="notice" id="mRevised"></div>
+      </div>
+      <div class="card doc-block">
+        <h3>三、引用格式与逐条出处</h3>
+        <p id="mCitation" style="line-height:1.7"></p>
+        <p style="font-size:12px;color:#6b7c93" id="mMainNote"></p>
+        <ul id="sourceList" style="max-height:270px;overflow-y:auto;font-size:13px;line-height:1.9"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 四个主数据文件由 js/main.js 的 DATA_ENABLED 开关统一注入，此处只额外加载权威基准数据集 -->
+  <script src="js/echarts.min.js"></script>
+  <script src="data/official_benchmark.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    AQ.initPage("official", {});
+
+    var off = AQI_OFFICIAL;
+    var recs = off.records;
+    var years = recs.map(function (r) { return r.year; });
+    var meta = off.meta;
+
+    function esc(s) {
+      return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    document.getElementById("mName").textContent = meta.dataset;
+    document.getElementById("mPublisher").textContent = meta.publisher;
+    document.getElementById("mAuthority").textContent = meta.authority;
+    document.getElementById("mCoverage").textContent = meta.coverage;
+    document.getElementById("mRetrieved").textContent = meta.retrieved;
+    var portal = document.getElementById("mPortal");
+    portal.href = meta.source_portal;
+    portal.textContent = meta.source_portal;
+    document.getElementById("mScope").textContent =
+      "口径说明：" + meta.note_on_scope + " " + meta.note_on_main_data;
+    document.getElementById("mCitation").textContent = "引用格式：" + meta.citation;
+    document.getElementById("mMainNote").textContent = meta.related_registered_dataset;
+
+    // 联网复核：由 official_benchmark.py --verify 重新抓取官方 HTML 通报后写入数据集
+    var vf = off.verification || [];
+    var okCount = vf.filter(function (v) {
+      return v.pm25_match && v.good_rate_match;
+    }).length;
+    document.getElementById("mVerify").innerHTML = vf.length
+      ? "<b>联网复核：</b>已重新抓取 " + vf.length + " 个官方 HTML 年度通报页面并与本数据集逐项比对，" +
+        "其中 " + okCount + " 年的 PM2.5 与优良天数比例全部一致。" +
+        "运行 <code>python official_benchmark.py --verify</code> 可重现该校验。"
+      : "<b>联网复核：</b>尚未执行。运行 <code>python official_benchmark.py --verify</code> " +
+        "可重新抓取官方 HTML 通报页面并逐项核验数值。";
+
+    var localPm = years.map(function (y) {
+      var r = AQI_YEAR_AVG.national.filter(function (d) { return d.year === y; })[0];
+      return r ? r["PM2.5"] : null;
+    });
+    var offPm = recs.map(function (r) { return r.pm25; });
+    // 前端复算两组序列的 Pearson r，与 analysis/stats_summary.json 的 SciPy 结果互为印证
+    var pairs = [];
+    years.forEach(function (y, i) {
+      if (offPm[i] !== null && localPm[i] !== null &&
+          !isNaN(offPm[i]) && !isNaN(localPm[i])) {
+        pairs.push([offPm[i], localPm[i]]);
+      }
+    });
+    var meanDiff = pairs.length
+      ? (pairs.reduce(function (s, p) { return s + (p[1] - p[0]); }, 0) / pairs.length) : 0;
+    var r = null;
+    if (pairs.length >= 3) {
+      var mx = pairs.reduce(function (s, p) { return s + p[0]; }, 0) / pairs.length;
+      var my = pairs.reduce(function (s, p) { return s + p[1]; }, 0) / pairs.length;
+      var sxy = 0, sxx = 0, syy = 0;
+      pairs.forEach(function (p) {
+        sxy += (p[0] - mx) * (p[1] - my);
+        sxx += (p[0] - mx) * (p[0] - mx);
+        syy += (p[1] - my) * (p[1] - my);
+      });
+      r = (sxx && syy) ? sxy / Math.sqrt(sxx * syy) : null;
+    }
+    document.getElementById("mDeviation").innerHTML =
+      "<b>口径差异：</b>官方值为部委按 GB 3095—2012 对 " +
+      recs[recs.length - 1].city_count +
+      " 个地级及以上城市的全年统一评价；本项目曲线为 76 个代表城市按每 3 天抽样后的聚合值。" +
+      "两者十年平均相差 <b>" + meanDiff.toFixed(1) +
+      " μg/m³</b>，但趋势 Pearson <b>r = " + (r === null ? "—" : r.toFixed(3)) +
+      "</b>（" + pairs.length + " 年；显著性检验见 <code>analysis/stats_summary.json</code>），" +
+      "即口径不同、演变方向高度一致，数值不必强行相等。";
+
+    var chartPm = AQ.makeChart(document.getElementById("chartPmCompare"));
+    chartPm.setOption({
+      tooltip: { trigger: "axis" },
+      legend: { data: ["生态环境部官方值", "本项目抽样聚合值"], top: 4 },
+      grid: { left: 50, right: 24, top: 42, bottom: 30 },
+      xAxis: { type: "category", data: years.map(String) },
+      yAxis: { type: "value", name: "μg/m³" },
+      series: [
+        { name: "生态环境部官方值", type: "line", data: offPm, smooth: true,
+          symbolSize: 8, lineStyle: { width: 3 }, itemStyle: { color: "#c0392b" },
+          connectNulls: true },
+        { name: "本项目抽样聚合值", type: "line", data: localPm, smooth: true,
+          symbolSize: 8, lineStyle: { width: 3, type: "dashed" }, itemStyle: { color: "#3a7bd5" },
+          connectNulls: true }
+      ]
+    });
+
+    var revised = off.revisedGoodRate;
+    var chartGood = AQ.makeChart(document.getElementById("chartGoodRate"));
+    chartGood.setOption({
+      tooltip: { trigger: "axis" },
+      legend: { data: ["当年通报口径", "2024 公报回溯口径"], top: 4 },
+      grid: { left: 50, right: 24, top: 42, bottom: 30 },
+      xAxis: { type: "category", data: years.map(String) },
+      yAxis: { type: "value", name: "%", min: 70, max: 92 },
+      series: [
+        { name: "当年通报口径", type: "line", smooth: true, symbolSize: 8,
+          lineStyle: { width: 3 }, itemStyle: { color: "#2fa876" }, connectNulls: true,
+          data: recs.map(function (r) { return r.good_rate; }) },
+        { name: "2024 公报回溯口径", type: "line", smooth: true, symbolSize: 8,
+          lineStyle: { width: 3, type: "dashed" }, itemStyle: { color: "#e67e22" },
+          connectNulls: true,
+          data: years.map(function (y) { return revised[String(y)] === undefined ? null : revised[String(y)]; }) }
+      ]
+    });
+    document.getElementById("mRevised").textContent =
+      "回溯序列来自 " + off.revisedSource + "：2016—2018 年两组值差异明显，源于城市数与沙尘扣除口径调整；" +
+      "本页保留各年原始通报值，不做回溯改写。";
+
+    // 表头 title 取自数据集的 metricLabels（指标定义与统计口径）
+    var cols = [
+      ["year", "年份"], ["city_count", "城市数"], ["good_rate", "优良天数%"],
+      ["heavy_rate", "重污染天数%"],
+      ["pm25", "PM2.5"], ["pm10", "PM10"], ["o3", "O₃"], ["so2", "SO₂"],
+      ["no2", "NO₂"], ["co", "CO"], ["attainment_cities", "达标城市"], ["source_url", "官方出处"]
+    ];
+    var html = "<tr>" + cols.map(function (c) {
+      var def = off.metricLabels[c[0]];
+      return "<th" + (def ? ' title="' + esc(def) + '"' : "") + ">" + c[1] + "</th>";
+    }).join("") + "</tr>";
+    recs.forEach(function (r) {
+      html += "<tr>" + cols.map(function (c) {
+        var v = r[c[0]];
+        if (c[0] === "source_url") {
+          return '<td><a href="' + esc(v) + '" target="_blank" rel="noopener">查看原文 ↗</a></td>';
+        }
+        return "<td>" + (v === null || v === undefined ? "—" : v) + "</td>";
+      }).join("") + "</tr>";
+    });
+    document.getElementById("officialTable").innerHTML = html;
+
+    // 逐条出处：标题链接 + 文种 / 发布日期 / 城市数，悬停可见原文摘录
+    document.getElementById("sourceList").innerHTML = recs.map(function (r) {
+      return '<li title="' + esc(r.quote) + '">' +
+        '<a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">' +
+        esc(r.year + " · " + r.source_title) + " ↗</a>" +
+        '<br><span style="color:#6b7c93">' + esc(r.source_kind + " · " + r.source_date +
+        " · " + r.city_count + " 城市") + "</span></li>";
+    }).join("");
+  </script>
+</body>
+</html>

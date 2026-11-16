@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>相关性与特征分析 - 空气质量时空演变可视化系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="page-title">
+      <h2>相关性与特征分析</h2>
+      <p>挖掘污染物之间、污染物与气象要素的关联规律与城市污染类型特征</p>
+    </div>
+
+    <div class="filter-bar" id="filterBar"></div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3>相关性热力图 <span class="sub">污染物与气温、降水、风速的 Pearson 相关系数矩阵</span></h3>
+        <div id="chartHeat" class="chart" style="height:520px"></div>
+      </div>
+      <div class="card">
+        <h3>城市污染类型分布 <span class="sub">基于十年污染特征的城市聚类结果</span></h3>
+        <div id="chartCluster" class="chart" style="height:520px"></div>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:16px">
+      <div class="card">
+        <h3>气温 - O₃ 散点分析 <span class="sub">月度样本 · 附线性拟合趋势线</span></h3>
+        <div id="chartScatterO3" class="chart" style="height:420px"></div>
+      </div>
+      <div class="card">
+        <h3>风速 - PM2.5 散点分析 <span class="sub">月度样本 · 附线性拟合趋势线</span></h3>
+        <div id="chartScatterPm" class="chart" style="height:420px"></div>
+      </div>
+    </div>
+
+    <div class="card doc-block" style="margin-top:16px">
+      <h3>分析方法说明</h3>
+      <ul>
+        <li><b>相关性热力图：</b>基于城市-月度记录计算污染物之间、污染物与气温/降水/风速的 Pearson 相关系数矩阵；</li>
+        <li><b>散点拟合：</b>对"气温-O₃""风速-PM2.5"做散点图并用最小二乘法拟合线性趋势线；</li>
+        <li><b>城市聚类：</b>按十年污染特征将城市划分为颗粒物主导型、臭氧主导型、优良型；</li>
+        <li>以上分析均基于接入的真实监测数据（CNEMC 归档）计算得出，相关系数另经 SciPy 显著性检验。</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="js/echarts.min.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    AQ.initPage("correlation", {});
+
+    if (!AQ.hasData()) {
+      AQ.noData(document.getElementById("chartHeat"), "接入真实数据后计算污染物与气象要素相关矩阵");
+      AQ.noData(document.getElementById("chartCluster"), "接入真实数据后基于真实污染特征进行城市聚类");
+      AQ.noData(document.getElementById("chartScatterO3"), "接入真实数据后绘制气温-O₃ 散点拟合");
+      AQ.noData(document.getElementById("chartScatterPm"), "接入真实数据后绘制风速-PM2.5 散点拟合");
+    } else {
+    var chartHeat = AQ.makeChart(document.getElementById("chartHeat"));
+    var chartClu = AQ.makeChart(document.getElementById("chartCluster"));
+    var chartS1 = AQ.makeChart(document.getElementById("chartScatterO3"));
+    var chartS2 = AQ.makeChart(document.getElementById("chartScatterPm"));
+
+    var labels = AQI_CORR.labels, matrix = AQI_CORR.matrix;
+
+    // ---- 相关性热力图 ----
+    var heatData = [];
+    for (var i = 0; i < labels.length; i++)
+      for (var j = 0; j < labels.length; j++)
+        heatData.push([j, i, matrix[i][j]]);
+
+    chartHeat.setOption({
+      tooltip: {
+        position: "top",
+        formatter: function (p) {
+          return labels[p.value[1]] + " × " + labels[p.value[0]] +
+            "<br/>相关系数：<b>" + p.value[2] + "</b>";
+        }
+      },
+      grid: { left: 80, right: 20, top: 30, bottom: 90 },
+      xAxis: { type: "category", data: labels, axisLabel: { rotate: 45, color: "#5a7ca6" }, splitArea: { show: true } },
+      yAxis: { type: "category", data: labels, axisLabel: { color: "#5a7ca6" }, splitArea: { show: true } },
+      visualMap: {
+        min: -1, max: 1, calculable: true, orient: "horizontal",
+        left: "center", bottom: 0,
+        inRange: { color: ["#2f7ad6", "#ffffff", "#e2543a"] },
+        textStyle: { color: "#5a7ca6" }
+      },
+      series: [{
+        type: "heatmap", data: heatData,
+        label: { show: true, fontSize: 10, color: "#334" },
+        emphasis: { itemStyle: { shadowBlur: 8, shadowColor: "rgba(0,0,0,0.4)" } }
+      }]
+    });
+
+    // ---- 聚类饼图 ----
+    var cluCount = { "颗粒物主导型": 0, "臭氧主导型": 0, "优良型": 0 };
+    Object.keys(AQI_RANK.cluster).forEach(function (c) { cluCount[AQI_RANK.cluster[c]]++; });
+    chartClu.setOption({
+      tooltip: { trigger: "item", formatter: "{b}：{c} 个城市（{d}%）" },
+      legend: { bottom: 10 },
+      series: [{
+        type: "pie", radius: ["35%", "62%"], center: ["50%", "46%"],
+        itemStyle: { borderRadius: 8, borderColor: "#fff", borderWidth: 2 },
+        label: { formatter: "{b}\n{d}%" },
+        data: [
+          { name: "颗粒物主导型", value: cluCount["颗粒物主导型"], itemStyle: { color: "#8e6fd8" } },
+          { name: "臭氧主导型", value: cluCount["臭氧主导型"], itemStyle: { color: "#e67e22" } },
+          { name: "优良型", value: cluCount["优良型"], itemStyle: { color: "#2fa876" } }
+        ]
+      }]
+    });
+
+    // ---- 散点 + 拟合线 ----
+    function scatterOption(points, xName, yName, color) {
+      // 最小二乘拟合
+      var n = points.length, sx = 0, sy = 0, sxy = 0, sxx = 0;
+      points.forEach(function (p) { sx += p[0]; sy += p[1]; sxy += p[0] * p[1]; sxx += p[0] * p[0]; });
+      var k = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+      var b = (sy - k * sx) / n;
+      var xs = points.map(function (p) { return p[0]; });
+      var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+      return {
+        tooltip: {
+          formatter: function (p) {
+            if (p.seriesType === "scatter")
+              return xName + "：" + p.value[0] + "<br/>" + yName + "：" + p.value[1] +
+                "<br/>省份：" + p.value[2];
+          }
+        },
+        grid: { left: 60, right: 24, top: 30, bottom: 40 },
+        xAxis: { type: "value", name: xName, scale: true },
+        yAxis: { type: "value", name: yName, scale: true },
+        series: [
+          {
+            type: "scatter", symbolSize: 6, itemStyle: { color: color, opacity: 0.55 },
+            data: points
+          },
+          {
+            type: "line", data: [[xmin, +(k * xmin + b).toFixed(2)], [xmax, +(k * xmax + b).toFixed(2)]],
+            showSymbol: false, lineStyle: { color: "#e2543a", width: 2.5, type: "dashed" },
+            tooltip: { show: false },
+            markPoint: {
+              symbolSize: 0, label: {
+                show: true, formatter: "拟合：y = " + k.toFixed(2) + "x + " + b.toFixed(2),
+                position: [-10, -24], color: "#c0392b", fontSize: 12
+              }, data: [{ coord: [xmin, k * xmin + b] }]
+            }
+          }
+        ]
+      };
+    }
+
+    chartS1.setOption(scatterOption(AQI_CORR.scatterTempO3, "气温 (℃)", "O₃ (μg/m³)", "#e67e22"));
+    chartS2.setOption(scatterOption(AQI_CORR.scatterWindPm, "风速 (m/s)", "PM2.5 (μg/m³)", "#8e6fd8"));
+    }
+  </script>
+</body>
+</html>

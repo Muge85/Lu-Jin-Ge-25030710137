@@ -1,0 +1,5 @@
+appId: wbapp_s1ks4t1gzMWGzIejiPBrhH
+name: 空气质量时空演变可视化
+localDir: D:\数据分析与可视化\air_quality_web
+appType: web
+entryHtml: index.html
