@@ -63,7 +63,6 @@
     "06_weather_scatter.png",
     "07_official_compare.png"
   ],
-  "charts_html": "charts.html",
   "web_charts_html": "analysis_charts.html",
   "official_benchmark": {
     "dataset": "中国环境空气质量官方年度指标数据集（2015—2024）",

@@ -6,7 +6,7 @@ analysis_charts.py - 统计分析与图表输出
 读取 air_quality_web/data/*.js（与前端同源的数据），输出：
 
   analysis/figures/*.png      七张静态统计图（Matplotlib + Seaborn，含官方权威数据对照图）
-  analysis/charts.html        交互式图表（PyEcharts，引用站点本地 ECharts，离线可用）
+  air_quality_web/analysis_charts.html  交互式图表（PyEcharts，站点内唯一入口，引用 js/echarts.min.js）
   analysis/stats_summary.json SciPy 统计检验摘要 + 官方基准对照摘要（供课程报告引用）
 
 第 7 张图读取 official_benchmark.py 产出的 analysis/official_benchmark.json；
@@ -300,22 +300,16 @@ def run(web_dir, out_dir):
         print("  站点图:", dst, os.path.getsize(dst), "bytes")
 
     print("生成交互图表（PyEcharts）...")
-    html = os.path.join(out_dir, "charts.html")
-    pyecharts_page(year, month, rank, html)
-    print("  HTML:", os.path.basename(html), os.path.getsize(html), "bytes")
-
-    # 站点内再放一份：引用同级 js/echarts.min.js，可通过 serve.py 直接访问
+    # 仅在站点内生成一份：引用同级 js/echarts.min.js，可通过 serve.py 直接访问
     CurrentConfig.ONLINE_HOST = "js/"
     web_html = os.path.join(web_dir, "analysis_charts.html")
     pyecharts_page(year, month, rank, web_html)
-    CurrentConfig.ONLINE_HOST = "../air_quality_web/js/"
     print("  站点 HTML:", os.path.basename(web_html), os.path.getsize(web_html), "bytes")
 
     summary = {
         "pearson_tests": corr.get("tests", {}),
         "linear_trend": corr.get("trend", {}),
         "figures": sorted(os.listdir(fig_dir)),
-        "charts_html": os.path.basename(html),
         "web_charts_html": os.path.basename(web_html),
     }
     if official_summary:

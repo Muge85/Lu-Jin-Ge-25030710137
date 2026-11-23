@@ -76,7 +76,7 @@
           <tr><td>权威数据接入</td><td><code>official_benchmark.py</code>（官方发布稿结构化 + 联网复核）→
               <code>analysis/official_benchmark.json</code> / <code>.csv</code> /
               <code>data/official_benchmark.js</code>（<code>window.AQI_OFFICIAL</code>），对照页 <code>official.html</code></td></tr>
-          <tr><td>统计分析图表</td><td>Matplotlib + Seaborn（<code>analysis/figures/*.png</code> 七张静态统计图，含 <code>07_official_compare.png</code>）、PyEcharts（<code>analysis/charts.html</code> 交互图表），脚本 <code>analysis_charts.py</code></td></tr>
+          <tr><td>统计分析图表</td><td>Matplotlib + Seaborn（<code>analysis/figures/*.png</code> 七张静态统计图，含 <code>07_official_compare.png</code>）、PyEcharts（<code>analysis_charts.html</code> 交互图表），脚本 <code>analysis_charts.py</code></td></tr>
           <tr><td>可视化图表</td><td>ECharts 5（地图、折线、柱状、热力、散点、饼图、时间轴动画）</td></tr>
           <tr><td>页面开发</td><td>HTML + CSS + JavaScript，纯前端静态站点</td></tr>
           <tr><td>运行方式</td><td>本地直接双击 HTML 文件即可运行，无需后端服务器</td></tr>
@@ -116,7 +116,7 @@
               <code>AQI_MONTH_AVG</code> / <code>AQI_CORR</code> / <code>AQI_RANK</code>）
               加一个权威基准文件（<code>AQI_OFFICIAL</code>），由 <code>build_real_data.py</code> 一键重建；</li>
           <li><b>统计分析与出图：</b><code>python build_real_data.py analyze</code> 基于 NumPy / pandas / SciPy / Matplotlib / Seaborn / PyEcharts
-              输出 <code>analysis/figures/*.png</code>、<code>analysis/charts.html</code> 与 <code>stats_summary.json</code>；</li>
+              输出 <code>analysis/figures/*.png</code>、<code>analysis_charts.html</code> 与 <code>stats_summary.json</code>；</li>
           <li><b>本地预览：</b>在 <code>air_quality_web/</code> 目录下执行 <code>python serve.py</code>
               （默认 8765 端口，自带 no-cache 响应头，数据更新即时生效）。</li>
         </ul>
