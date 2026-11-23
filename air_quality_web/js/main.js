@@ -78,8 +78,7 @@ window.AQ = (function () {
     { key: "trend",        href: "trend.html",        ico: "📈", name: "时序趋势分析" },
     { key: "rank",         href: "rank.html",         ico: "🏆", name: "城市排名对比" },
     { key: "correlation",  href: "correlation.html",  ico: "🔗", name: "相关性分析" },
-    { key: "official",     href: "official.html",     ico: "▣", name: "权威数据对照" },
-    { key: "about",        href: "about.html",        ico: "📖", name: "数据与项目说明" }
+    { key: "official",     href: "official.html",     ico: "▣", name: "权威数据对照" }
   ];
 
   function initPage(activeKey, opts) {
