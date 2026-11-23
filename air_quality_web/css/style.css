@@ -190,7 +190,7 @@ body {
 }
 .modal .close:hover { color: var(--warn); }
 
-/* ---------- 说明页 ---------- */
+/* ---------- 文档块与提示块 ---------- */
 .doc-block h3 { margin: 18px 0 8px; }
 .doc-block p, .doc-block li { font-size: 14px; line-height: 1.9; color: #44566c; }
 .doc-block ul { padding-left: 22px; }
