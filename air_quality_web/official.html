@@ -30,14 +30,11 @@
           <tr><td>来源平台</td><td><a id="mPortal" href="#" target="_blank" rel="noopener"></a></td></tr>
           <tr><td>获取日期</td><td id="mRetrieved"></td></tr>
         </table>
-        <div class="notice" id="mScope"></div>
-        <div class="notice" id="mVerify"></div>
       </div>
 
       <div class="card">
         <h3>PM2.5 年均浓度：官方统计 vs 本项目聚合 <span class="sub">μg/m³</span></h3>
         <div id="chartPmCompare" class="chart" style="height:330px"></div>
-        <div class="notice" id="mDeviation"></div>
       </div>
     </div>
 
@@ -54,7 +51,6 @@
       <div class="card">
         <h3>优良天数比例：两种官方口径 <span class="sub">%</span></h3>
         <div id="chartGoodRate" class="chart" style="height:330px"></div>
-        <div class="notice" id="mRevised"></div>
       </div>
       <div class="card doc-block">
         <h3>三、引用格式与逐条出处</h3>
@@ -90,59 +86,14 @@
     var portal = document.getElementById("mPortal");
     portal.href = meta.source_portal;
     portal.textContent = meta.source_portal;
-    document.getElementById("mScope").textContent =
-      "口径说明：" + meta.note_on_scope + " " + meta.note_on_main_data;
     document.getElementById("mCitation").textContent = "引用格式：" + meta.citation;
     document.getElementById("mMainNote").textContent = meta.related_registered_dataset;
-
-    // 联网复核：由 official_benchmark.py --verify 重新抓取官方 HTML 通报后写入数据集
-    var vf = off.verification || [];
-    var okCount = vf.filter(function (v) {
-      return v.pm25_match && v.good_rate_match;
-    }).length;
-    document.getElementById("mVerify").innerHTML = vf.length
-      ? "<b>联网复核：</b>已重新抓取 " + vf.length + " 个官方 HTML 年度通报页面并与本数据集逐项比对，" +
-        "其中 " + okCount + " 年的 PM2.5 与优良天数比例全部一致。" +
-        "运行 <code>python official_benchmark.py --verify</code> 可重现该校验。"
-      : "<b>联网复核：</b>尚未执行。运行 <code>python official_benchmark.py --verify</code> " +
-        "可重新抓取官方 HTML 通报页面并逐项核验数值。";
 
     var localPm = years.map(function (y) {
       var r = AQI_YEAR_AVG.national.filter(function (d) { return d.year === y; })[0];
       return r ? r["PM2.5"] : null;
     });
     var offPm = recs.map(function (r) { return r.pm25; });
-    // 前端复算两组序列的 Pearson r，与 analysis/stats_summary.json 的 SciPy 结果互为印证
-    var pairs = [];
-    years.forEach(function (y, i) {
-      if (offPm[i] !== null && localPm[i] !== null &&
-          !isNaN(offPm[i]) && !isNaN(localPm[i])) {
-        pairs.push([offPm[i], localPm[i]]);
-      }
-    });
-    var meanDiff = pairs.length
-      ? (pairs.reduce(function (s, p) { return s + (p[1] - p[0]); }, 0) / pairs.length) : 0;
-    var r = null;
-    if (pairs.length >= 3) {
-      var mx = pairs.reduce(function (s, p) { return s + p[0]; }, 0) / pairs.length;
-      var my = pairs.reduce(function (s, p) { return s + p[1]; }, 0) / pairs.length;
-      var sxy = 0, sxx = 0, syy = 0;
-      pairs.forEach(function (p) {
-        sxy += (p[0] - mx) * (p[1] - my);
-        sxx += (p[0] - mx) * (p[0] - mx);
-        syy += (p[1] - my) * (p[1] - my);
-      });
-      r = (sxx && syy) ? sxy / Math.sqrt(sxx * syy) : null;
-    }
-    document.getElementById("mDeviation").innerHTML =
-      "<b>口径差异：</b>官方值为部委按 GB 3095—2012 对 " +
-      recs[recs.length - 1].city_count +
-      " 个地级及以上城市的全年统一评价；本项目曲线为 76 个代表城市按每 3 天抽样后的聚合值。" +
-      "两者十年平均相差 <b>" + meanDiff.toFixed(1) +
-      " μg/m³</b>，但趋势 Pearson <b>r = " + (r === null ? "—" : r.toFixed(3)) +
-      "</b>（" + pairs.length + " 年；显著性检验见 <code>analysis/stats_summary.json</code>），" +
-      "即口径不同、演变方向高度一致，数值不必强行相等。";
-
     var chartPm = AQ.makeChart(document.getElementById("chartPmCompare"));
     chartPm.setOption({
       tooltip: { trigger: "axis" },
@@ -178,10 +129,6 @@
           data: years.map(function (y) { return revised[String(y)] === undefined ? null : revised[String(y)]; }) }
       ]
     });
-    document.getElementById("mRevised").textContent =
-      "回溯序列来自 " + off.revisedSource + "：2016—2018 年两组值差异明显，源于城市数与沙尘扣除口径调整；" +
-      "本页保留各年原始通报值，不做回溯改写。";
-
     // 表头 title 取自数据集的 metricLabels（指标定义与统计口径）
     var cols = [
       ["year", "年份"], ["city_count", "城市数"], ["good_rate", "优良天数%"],
