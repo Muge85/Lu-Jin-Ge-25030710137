@@ -73,11 +73,14 @@
     var selected = [];   // 自选对比城市
     var sortKey = "AQI", sortAsc = false;
 
-    // ---- 城市选择 chips（基于当前筛选省份） ----
+    // ---- 城市选择 chips（全国城市，不受省份筛选限制，支持跨省对比） ----
     function renderChips() {
-      var prov = AQ.state.province;
-      var cities = AQ.cityYear(2024, prov).map(function (r) { return r.city; });
-      selected = selected.filter(function (c) { return cities.indexOf(c) >= 0; });
+      // 取全部城市的 2024 记录（去重），而非仅当前筛选省份，
+      // 这样自选对比可以跨省选城市；省份筛选只影响榜单与明细表。
+      var seen = {}, cities = [];
+      AQ.cityYear(2024, "全国").forEach(function (r) {
+        if (!seen[r.city]) { seen[r.city] = 1; cities.push(r.city); }
+      });
       document.getElementById("cityChips").innerHTML = cities.map(function (c) {
         return '<span class="chip' + (selected.indexOf(c) >= 0 ? " on" : "") + '" data-c="' + c + '">' + c + '</span>';
       }).join("");
