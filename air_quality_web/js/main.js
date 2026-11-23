@@ -125,7 +125,11 @@ window.AQ = (function () {
           '<input type="range" id="fYear" min="2015" max="2024" step="1" value="' + state.year + '">' +
           '<span class="year-badge" id="fYearBadge">' + state.year + '</span></div>';
       }
-      html += '<span class="filter-tip">筛选条件变更后，本页所有图表同步刷新</span>';
+      // 相关性分析页的图表（相关性矩阵、聚类分布等）不随筛选条件变化，
+      // 该提示在此页无实际意义，故不显示；其余页面保留说明。
+      if (activeKey !== "correlation") {
+        html += '<span class="filter-tip">筛选条件变更后，本页所有图表同步刷新</span>';
+      }
       bar.innerHTML = html;
 
       var sel = document.getElementById("fPollutant");
