@@ -104,13 +104,23 @@
     // ---- 聚类饼图 ----
     var cluCount = { "颗粒物主导型": 0, "臭氧主导型": 0, "优良型": 0 };
     Object.keys(AQI_RANK.cluster).forEach(function (c) { cluCount[AQI_RANK.cluster[c]]++; });
+    // 统计口径：始终以全部城市数为分母。ECharts 的 {d}% 会按"当前可见项"重新归一化，
+    // 图例非全选时优良型会被算成 100%，与全选口径不一致。改用固定分母的自定义格式化，
+    // 使任意图例选中状态下显示的占比都与全选状态一致（如图例仅选优良型仍显示 43.42%）。
+    var cluTotal = Object.keys(AQI_RANK.cluster).length;
+    function cluPct(n) { return (100 * n / cluTotal).toFixed(2) + "%"; }
     chartClu.setOption({
-      tooltip: { trigger: "item", formatter: "{b}：{c} 个城市（{d}%）" },
+      tooltip: {
+        trigger: "item",
+        formatter: function (p) { return p.name + "：" + p.value + " 个城市（" + cluPct(p.value) + "）"; }
+      },
       legend: { bottom: 10 },
       series: [{
         type: "pie", radius: ["35%", "62%"], center: ["50%", "46%"],
         itemStyle: { borderRadius: 8, borderColor: "#fff", borderWidth: 2 },
-        label: { formatter: "{b}\n{d}%" },
+        label: {
+          formatter: function (p) { return p.name + "\n" + cluPct(p.value); }
+        },
         data: [
           { name: "颗粒物主导型", value: cluCount["颗粒物主导型"], itemStyle: { color: "#8e6fd8" } },
           { name: "臭氧主导型", value: cluCount["臭氧主导型"], itemStyle: { color: "#e67e22" } },
