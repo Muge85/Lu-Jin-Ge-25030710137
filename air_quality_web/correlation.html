@@ -23,7 +23,10 @@
       </div>
       <div class="card">
         <h3>城市污染类型分布 <span class="sub">基于十年污染特征的城市聚类结果</span></h3>
-        <div id="chartCluster" class="chart" style="height:520px"></div>
+        <div style="position:relative">
+          <div id="chartCluster" class="chart" style="height:520px"></div>
+          <div id="clusterLegend" class="cluster-legend"></div>
+        </div>
       </div>
     </div>
 
@@ -102,32 +105,61 @@
     });
 
     // ---- 聚类饼图 ----
+    // 统计口径：扇区几何与百分比始终以全部城市数为分母，不随筛选重新归一化。
+    // 图例为自定义控件：取消某类型仅将其扇区置灰占位（保留真实占比），不会让 ECharts
+    // 隐藏扇区并把其余类型放大到 100%，从而保证任意筛选状态下图形与数字口径一致。
     var cluCount = { "颗粒物主导型": 0, "臭氧主导型": 0, "优良型": 0 };
     Object.keys(AQI_RANK.cluster).forEach(function (c) { cluCount[AQI_RANK.cluster[c]]++; });
-    // 统计口径：始终以全部城市数为分母。ECharts 的 {d}% 会按"当前可见项"重新归一化，
-    // 图例非全选时优良型会被算成 100%，与全选口径不一致。改用固定分母的自定义格式化，
-    // 使任意图例选中状态下显示的占比都与全选状态一致（如图例仅选优良型仍显示 43.42%）。
     var cluTotal = Object.keys(AQI_RANK.cluster).length;
+    var cluDefs = [
+      { name: "颗粒物主导型", color: "#8e6fd8" },
+      { name: "臭氧主导型", color: "#e67e22" },
+      { name: "优良型", color: "#2fa876" }
+    ];
+    var cluSelected = {};
+    cluDefs.forEach(function (d) { cluSelected[d.name] = true; });
+    var cluGray = "#d9dde3";
     function cluPct(n) { return (100 * n / cluTotal).toFixed(2) + "%"; }
+    function cluData() {
+      return cluDefs.map(function (d) {
+        return {
+          name: d.name, value: cluCount[d.name],
+          itemStyle: { color: cluSelected[d.name] ? d.color : cluGray }
+        };
+      });
+    }
+    function cluRenderLegend() {
+      var box = document.getElementById("clusterLegend");
+      box.innerHTML = cluDefs.map(function (d) {
+        var on = cluSelected[d.name];
+        return '<button type="button" class="clu-lg' + (on ? '' : ' off') + '" data-n="' + d.name + '">' +
+          '<i style="background:' + d.color + '"></i>' + d.name + '</button>';
+      }).join("");
+      Array.prototype.forEach.call(box.querySelectorAll("button[data-n]"), function (btn) {
+        btn.addEventListener("click", function () {
+          var n = btn.getAttribute("data-n");
+          cluSelected[n] = !cluSelected[n];
+          cluRenderLegend();
+          chartClu.setOption({ series: [{ data: cluData() }] });
+        });
+      });
+    }
     chartClu.setOption({
       tooltip: {
         trigger: "item",
-        formatter: function (p) { return p.name + "：" + p.value + " 个城市（" + cluPct(p.value) + "）"; }
+        formatter: function (p) {
+          return p.name + "：" + p.value + " 个城市（" + cluPct(p.value) +
+            (cluSelected[p.name] ? "" : "，未选中") + "）";
+        }
       },
-      legend: { bottom: 10 },
       series: [{
-        type: "pie", radius: ["35%", "62%"], center: ["50%", "46%"],
+        type: "pie", radius: ["35%", "62%"], center: ["50%", "44%"],
         itemStyle: { borderRadius: 8, borderColor: "#fff", borderWidth: 2 },
-        label: {
-          formatter: function (p) { return p.name + "\n" + cluPct(p.value); }
-        },
-        data: [
-          { name: "颗粒物主导型", value: cluCount["颗粒物主导型"], itemStyle: { color: "#8e6fd8" } },
-          { name: "臭氧主导型", value: cluCount["臭氧主导型"], itemStyle: { color: "#e67e22" } },
-          { name: "优良型", value: cluCount["优良型"], itemStyle: { color: "#2fa876" } }
-        ]
+        label: { formatter: function (p) { return p.name + "\n" + cluPct(p.value); } },
+        data: cluData()
       }]
     });
+    cluRenderLegend();
 
     // ---- 散点 + 拟合线 ----
     function scatterOption(points, xName, yName, color) {

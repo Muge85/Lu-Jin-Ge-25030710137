@@ -219,3 +219,20 @@ body {
   border-radius: 50%; animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 聚类饼图自定义图例：取消筛选仅置灰扇区，不改变统计口径 */
+.cluster-legend {
+  position: absolute; left: 0; right: 0; bottom: 2px;
+  display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; z-index: 3;
+}
+.cluster-legend .clu-lg {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border: 1px solid #d4e0ef; border-radius: 14px;
+  background: #f7fafd; color: var(--text); font-size: 12px;
+  cursor: pointer; user-select: none; transition: opacity .15s, background .15s;
+}
+.cluster-legend .clu-lg:hover { border-color: var(--primary); }
+.cluster-legend .clu-lg.off { opacity: .5; background: #eef1f5; text-decoration: line-through; }
+.cluster-legend .clu-lg i {
+  width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none;
+}
